@@ -1,0 +1,70 @@
+#include <iostream>
+using namespace std;
+
+struct Node {
+    int data;
+    vector<Node*> neighbours;
+};
+
+vector<Node*> createGraph(int n, int edges) {
+    vector<Node*> graph(n + 1);  // Indexing from 1
+    for (int i = 1; i <= n; i++) {
+        graph[i] = new Node;
+        graph[i]->data = i;
+    }
+
+    cout << "Enter " << edges << " edges (u v) =>" << endl;
+    for (int i = 0; i < edges; i++) {
+        int u, v;
+        cin >> u >> v;
+        graph[u]->neighbours.push_back(graph[v]);
+        graph[v]->neighbours.push_back(graph[u]);
+    }
+
+    return graph;
+}
+void dfs(Node* node, vector<bool>& visited) {
+    #pragma omp critical
+    {
+        if (visited[node->data]) return;
+        visited[node->data] = true;
+        cout << node->data << " ";
+    }
+
+    #pragma omp parallel for
+    {
+        for (Node* neighbour : node->neighbours) {
+            #pragma omp critical
+            {
+                if (!visited[neighbour->data]) {
+                    dfs(neighbour, visited);
+                }
+            }
+        }
+    }
+}
+
+void solve(Node *root) {
+    // Simple DFS
+    if (!root) return;
+    vector<bool> visited(100, false); // adjust size as needed
+    dfs(root, visited);
+}
+
+int main() {
+    int n, edges;
+    cout << "Enter number of nodes => ";
+    cin >> n;
+    cout << "Enter number of edges => ";
+    cin >> edges;
+
+    vector<Node*> graph = createGraph(n, edges);
+
+    cout << "Enter starting node => ";
+    int start;
+    cin >> start;
+
+    solve(graph[start]);
+
+    return 0;
+}
