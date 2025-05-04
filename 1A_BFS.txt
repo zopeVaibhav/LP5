@@ -1,73 +1,123 @@
 #include <iostream>
 #include <vector>
+#include <queue>
+#include <unordered_map>
 #include <omp.h>
-
 using namespace std;
 
 struct Node {
     int data;
-    vector<Node*> neighbours;
+    vector<Node*> children;
 };
 
-vector<Node*> createGraph(int n, int edges) {
-    vector<Node*> graph(n + 1);  // Indexing from 1
-    for (int i = 1; i <= n; i++) {
-        graph[i] = new Node;
-        graph[i]->data = i;
-    }
+// Function to perform parallel BFS
+void parallel_BFS(Node* root) {
+    if (!root) return;
 
-    cout << "Enter " << edges << " edges (u v) =>" << endl;
-    for (int i = 0; i < edges; i++) {
-        int u, v;
-        cin >> u >> v;
-        graph[u]->neighbours.push_back(graph[v]);
-        graph[v]->neighbours.push_back(graph[u]);
-    }
+    queue<Node*> q;
+    q.push(root);
 
-    return graph;
-}
-void dfs(Node* node, vector<bool>& visited) {
-    #pragma omp critical
-    {
-        if (visited[node->data]) return;
-        visited[node->data] = true;
-        cout << node->data << " ";
-    }
+    while (!q.empty()) {
+        int level_size = q.size();
+        vector<Node*> current_level;
 
-    #pragma omp parallel for
-    {
-        for (Node* neighbour : node->neighbours) {
+        for (int i = 0; i < level_size; ++i) {
+            current_level.push_back(q.front());
+            q.pop();
+        }
+
+        vector<Node*> next_level;
+
+        #pragma omp parallel for
+        for (int i = 0; i < current_level.size(); ++i) {
+            Node* current = current_level[i];
+
             #pragma omp critical
-            {
-                if (!visited[neighbour->data]) {
-                    dfs(neighbour, visited);
-                }
+            cout << current->data << " ";
+
+            #pragma omp critical
+            for (int j = 0; j < current->children.size(); ++j) {
+                next_level.push_back(current->children[j]);
             }
+        }
+
+        for (Node* node : next_level) {
+            q.push(node);
         }
     }
 }
 
-void solve(Node *root) {
-    // Simple DFS
-    if (!root) return;
-    vector<bool> visited(100, false); // adjust size as needed
-    dfs(root, visited);
-}
-
 int main() {
-    int n, edges;
-    cout << "Enter number of nodes => ";
+    int n;
+    cout << "Enter number of nodes: ";
     cin >> n;
-    cout << "Enter number of edges => ";
-    cin >> edges;
 
-    vector<Node*> graph = createGraph(n, edges);
+    unordered_map<int, Node*> nodes;
 
-    cout << "Enter starting node => ";
-    int start;
-    cin >> start;
+    // Create nodes
+    cout << "Enter values for " << n << " nodes:\n";
+    for (int i = 0; i < n; ++i) {
+        int val;
+        cin >> val;
+        nodes[val] = new Node{val};
+    }
 
-    solve(graph[start]);
+    int root_val;
+    cout << "Enter root node value: ";
+    cin >> root_val;
+
+    cout << "Enter children for each node (enter -1 to stop a node's children):\n";
+    for (int i = 0; i < n; ++i) {
+        int parent_val;
+        cout << "Parent node value: ";
+        cin >> parent_val;
+
+        cout << "Enter children of " << parent_val << ": ";
+        while (true) {
+            int child_val;
+            cin >> child_val;
+            if (child_val == -1) break;
+            nodes[parent_val]->children.push_back(nodes[child_val]);
+        }
+    }
+
+    cout << "\nParallel BFS Output: ";
+    parallel_BFS(nodes[root_val]);
+    cout << endl;
 
     return 0;
 }
+
+/*
+
+sample input 
+Enter number of nodes: 7
+Enter values for 7 nodes:
+10 20 30 40 50 60 70
+Enter root node value: 10
+Enter children for each node (enter -1 to stop a node's children):
+Parent node value: 10
+Enter children of 10: 20 30 40 -1
+Parent node value: 20
+Enter children of 20: 50 60 -1
+Parent node value: 30
+Enter children of 30: -1
+Parent node value: 40
+Enter children of 40: 70 -1
+Parent node value: 50
+Enter children of 50: -1
+Parent node value: 60
+Enter children of 60: -1
+Parent node value: 70
+Enter children of 70: -1
+
+          10
+       /   |   \
+     20   30   40
+    /  \        \
+  50   60       70
+
+Output
+Parallel BFS Output: 10 20 30 40 50 60 70 
+
+*/
